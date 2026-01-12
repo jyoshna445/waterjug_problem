@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Water Jug Problem</title>
+
+<style>
+body{
+    margin:0;
+    font-family:'Segoe UI', Arial;
+    background:linear-gradient(120deg,#1e3c72,#2a5298);
+}
+
+/* Heading */
+h1{
+    text-align:center;
+    font-size:42px;
+    color:white;
+    padding:20px;
+    margin:0;
+    letter-spacing:2px;
+    background:rgba(0,0,0,0.3);
+}
+
+/* Top Input and Display */
+.top{
+    text-align:center;
+    background:white;
+    padding:15px;
+}
+
+input{
+    padding:10px;
+    margin:5px;
+    border:2px solid black;
+    border-radius:5px;
+    font-size:16px;
+    width:120px;
+}
+
+button{
+    padding:10px 20px;
+    font-size:16px;
+    background:#003366;
+    color:white;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+    margin-left:10px;
+}
+
+/* Capacity Display after input */
+.capDisplay{
+    margin-top:10px;
+    font-size:18px;
+    color:#003366;
+    font-weight:bold;
+}
+
+/* Main layout */
+.main{
+    display:flex;
+    height:calc(100vh - 200px);
+}
+
+/* LEFT - Simulation */
+.left{
+    width:70%;
+    background:linear-gradient(to bottom,#89f7fe,#66a6ff);
+    padding:20px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
+
+/* RIGHT - State Space */
+.right{
+    width:30%;
+    padding:20px;
+    background:linear-gradient(to bottom,#89f7fe,#66a6ff);
+    border-left:5px solid #003366;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+}
+
+/* Goal State - bottom of right side */
+.goal{
+    background:#caffbf;
+    padding:12px;
+    border:3px solid green;
+    font-size:20px;
+    font-weight:bold;
+    text-align:center;
+    margin-top:15px;
+    display:none;
+}
+
+/* Tree */
+.tree{
+    font-size:18px;
+    line-height:28px;
+    background:rgba(255,255,255,0.6);
+    padding:10px;
+    border-radius:10px;
+    flex-grow:1;
+    overflow-y:auto;
+    margin-bottom:10px;
+}
+
+/* Jugs */
+.jugs{
+    display:flex;
+    justify-content:space-around;
+    width:100%;
+}
+
+.jug{
+    width:150px;
+    height:300px;
+    border:4px solid #003366;
+    border-radius:15px;
+    position:relative;
+    background:white;
+    overflow:hidden;
+}
+
+.water{
+    position:absolute;
+    bottom:0;
+    width:100%;
+    background:linear-gradient(to top,#005bea,#00c6fb);
+    transition:height 1s;
+}
+
+.water-text{
+    position:absolute;
+    width:100%;
+    top:45%;
+    text-align:center;
+    font-size:28px;
+    font-weight:bold;
+    color:#003366;
+}
+</style>
+</head>
+
+<body>
+
+<h1>💧 WATER JUG PROBLEM</h1>
+
+<div class="top">
+Jug A Capacity <input id="capAInput" type="number" required>
+Jug B Capacity <input id="capBInput" type="number" required>
+Goal to get in Jug A <input id="goalInput" type="number" required>
+<button id="startBtn">Start Simulation</button>
+<button id="replayBtn" style="display:none;">🔄 Replay Simulation</button>
+
+<div class="capDisplay" id="capDisplay">
+Jug A: -- L | Jug B: -- L | Goal: -- L
+</div>
+</div>
+
+<div class="main">
+
+<!-- LEFT SIDE -->
+<div class="left">
+<div class="jugs">
+<div>
+<div class="jug">
+<div id="waterA" class="water"></div>
+<div id="textA" class="water-text">0 L</div>
+</div>
+<h3 align="center">Jug A</h3>
+</div>
+
+<div>
+<div class="jug">
+<div id="waterB" class="water"></div>
+<div id="textB" class="water-text">0 L</div>
+</div>
+<h3 align="center">Jug B</h3>
+</div>
+</div>
+
+<h2 id="stepText" align="center"></h2>
+</div>
+
+<!-- RIGHT SIDE -->
+<div class="right">
+<h2>🌳 State Space Tree</h2>
+<div class="tree" id="treeBox"></div>
+<div id="goalBox" class="goal"></div>
+</div>
+
+</div>
+
+<script>
+// Elements
+let capAInput = document.getElementById("capAInput");
+let capBInput = document.getElementById("capBInput");
+let goalInput = document.getElementById("goalInput");
+let capDisplay = document.getElementById("capDisplay");
+let startBtn = document.getElementById("startBtn");
+let replayBtn = document.getElementById("replayBtn");
+
+let waterA = document.getElementById("waterA");
+let waterB = document.getElementById("waterB");
+let textA = document.getElementById("textA");
+let textB = document.getElementById("textB");
+let stepText = document.getElementById("stepText");
+let treeBox = document.getElementById("treeBox");
+let goalBox = document.getElementById("goalBox");
+
+let steps = [];
+let capA=0, capB=0, goal=0;
+let i=0;
+
+// Display capacities dynamically
+function updateCapacityDisplay(){
+    capDisplay.innerText = `Jug A: ${capAInput.value} L | Jug B: ${capBInput.value} L | Goal: ${goalInput.value} L`;
+}
+
+capAInput.addEventListener("input", updateCapacityDisplay);
+capBInput.addEventListener("input", updateCapacityDisplay);
+goalInput.addEventListener("input", updateCapacityDisplay);
+
+// BFS logic to stop at user goal in Jug A
+function bfs(capA, capB, goal){
+    let start = [0,0];
+    let queue = [[start, [start]]];
+    let visited = new Set(["0,0"]);
+
+    while(queue.length>0){
+        let [current, path] = queue.shift();
+        let [a,b] = current;
+
+        // Stop exactly when Jug A reaches user goal
+        if(a==goal) return path;
+
+        let states = [
+            [capA, b], [a, capB], [0, b], [a,0],
+            [a - Math.min(a, capB-b), b + Math.min(a, capB-b)],
+            [a + Math.min(b, capA-a), b - Math.min(b, capA-a)]
+        ];
+
+        for(let s of states){
+            let key = s[0]+","+s[1];
+            if(!visited.has(key)){
+                visited.add(key);
+                queue.push([s, path.concat([s])]);
+            }
+        }
+    }
+    return [];
+}
+
+// Reset simulation
+function resetSimulation(){
+    i=0;
+    waterA.style.height="0%";
+    waterB.style.height="0%";
+    textA.innerText="0 L";
+    textB.innerText="0 L";
+    stepText.innerText="";
+    treeBox.innerHTML="";
+    goalBox.style.display="none";
+    goalBox.innerHTML="";
+    replayBtn.style.display="none";
+    runSimulation();
+}
+
+// Run animation
+function runSimulation(){
+    if(i>=steps.length){
+        // Show Goal at bottom right
+        goalBox.innerText = `🎯 GOAL STATE: Jug A = ${goal} L`;
+        goalBox.style.display="block";
+
+        waterA.style.height = (steps[steps.length-1][0]/capA*100) + "%";
+        waterB.style.height = (steps[steps.length-1][1]/capB*100) + "%";
+        textA.innerText = steps[steps.length-1][0]+" L";
+        textB.innerText = steps[steps.length-1][1]+" L";
+
+        stepText.innerText += " ✅ Goal Reached";
+        replayBtn.style.display="inline-block";
+        // Highlight left jug to show goal
+        waterA.style.border = "4px solid green";
+        return;
+    }
+
+    let a = steps[i][0];
+    let b = steps[i][1];
+    let stepNo = i+1;
+
+    waterA.style.height = (a/capA*100) + "%";
+    waterB.style.height = (b/capB*100) + "%";
+
+    textA.innerText = a+" L";
+    textB.innerText = b+" L";
+
+    stepText.innerText = "Step "+stepNo+" → ("+a+","+b+")";
+
+    treeBox.innerHTML += "Step "+stepNo+" : ("+a+","+b+")<br>";
+
+    i++;
+    setTimeout(runSimulation,1200);
+}
+
+// Start simulation
+startBtn.addEventListener("click", ()=>{
+    if(!capAInput.value || !capBInput.value || !goalInput.value) return;
+    capA = parseInt(capAInput.value);
+    capB = parseInt(capBInput.value);
+    goal = parseInt(goalInput.value);
+    steps = bfs(capA, capB, goal);
+    i=0;
+    waterA.style.height="0%";
+    waterB.style.height="0%";
+    textA.innerText="0 L";
+    textB.innerText="0 L";
+    treeBox.innerHTML="";
+    goalBox.style.display="none";
+    waterA.style.border = "4px solid #003366";
+    runSimulation();
+    replayBtn.style.display="inline-block";
+});
+
+// Replay button
+replayBtn.addEventListener("click", resetSimulation);
+</script>
+
+</body>
+</html>
